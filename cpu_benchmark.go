@@ -20,7 +20,7 @@ type FileRecord struct {
 }
 
 const (
-	NumFiles        = 1000
+	NumFiles        = 100 // Total number of files to create and verify
 	FileSizeMB      = 1
 	FileSize        = FileSizeMB * 1024 * 1024 // 1MB
 	ConsumerWorkers = 10                       // Number of concurrent goroutines reading and verifying files
