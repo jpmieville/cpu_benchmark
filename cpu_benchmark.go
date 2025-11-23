@@ -2,11 +2,13 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
 	"crypto/rand"
 	"crypto/sha512"
 	"encoding/base64"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -28,12 +30,14 @@ type FileRecord struct {
 
 // BenchmarkStats tracks various statistics during benchmark execution
 type BenchmarkStats struct {
-	FilesProcessed   atomic.Int64
-	FilesVerified    atomic.Int64
-	ErrorsEncountered atomic.Int64
-	BytesWritten     atomic.Int64
-	BytesRead        atomic.Int64
-	StartTime        time.Time
+	FilesProcessed      atomic.Int64
+	FilesVerified       atomic.Int64
+	ErrorsEncountered   atomic.Int64
+	BytesWritten        atomic.Int64
+	BytesRead           atomic.Int64
+	BytesBeforeCompress atomic.Int64
+	BytesAfterCompress  atomic.Int64
+	StartTime           time.Time
 }
 
 // Config holds all configurable parameters for the benchmark
@@ -221,6 +225,18 @@ func printBenchmarkResults(stats *BenchmarkStats, config Config, duration time.D
 		fmt.Println()
 	}
 
+	// Compression statistics
+	if stats.BytesBeforeCompress.Load() > 0 {
+		compressionRatio := float64(stats.BytesAfterCompress.Load()) / float64(stats.BytesBeforeCompress.Load())
+		spaceSavings := (1.0 - compressionRatio) * 100
+		fmt.Printf("Compression:\n")
+		fmt.Printf("  Before compression: %.2f MB\n", float64(stats.BytesBeforeCompress.Load())/(1024*1024))
+		fmt.Printf("  After compression: %.2f MB\n", float64(stats.BytesAfterCompress.Load())/(1024*1024))
+		fmt.Printf("  Compression ratio: %.2f%%\n", compressionRatio*100)
+		fmt.Printf("  Space savings: %.2f%%\n", spaceSavings)
+		fmt.Println()
+	}
+
 	// Calculate average times
 	if stats.FilesProcessed.Load() > 0 {
 		avgTime := duration / time.Duration(stats.FilesProcessed.Load())
@@ -295,15 +311,31 @@ func createAndHashFile(index, fileSize int, fileChan chan<- FileRecord, stats *B
 	encodedContent := base64.StdEncoding.EncodeToString(randomBytes)
 	encodedBytes := []byte(encodedContent)
 
-	// 4. Write the encoded content to the file
-	// Note: The encoded content will be about 1.33x larger on disk.
-	if err := os.WriteFile(filename, encodedBytes, 0644); err != nil {
+	// 4. Compress the encoded content with gzip
+	var compressedBuf bytes.Buffer
+	gzipWriter := gzip.NewWriter(&compressedBuf)
+	if _, err := gzipWriter.Write(encodedBytes); err != nil {
+		fmt.Printf("Producer %d: Error compressing data: %v\n", index, err)
+		stats.ErrorsEncountered.Add(1)
+		return
+	}
+	if err := gzipWriter.Close(); err != nil {
+		fmt.Printf("Producer %d: Error closing gzip writer: %v\n", index, err)
+		stats.ErrorsEncountered.Add(1)
+		return
+	}
+	compressedBytes := compressedBuf.Bytes()
+
+	// 5. Write the compressed content to the file
+	if err := os.WriteFile(filename, compressedBytes, 0644); err != nil {
 		fmt.Printf("Producer %d: Error writing file %s: %v\n", index, filename, err)
 		stats.ErrorsEncountered.Add(1)
 		return
 	}
 
-	stats.BytesWritten.Add(int64(len(encodedBytes)))
+	stats.BytesWritten.Add(int64(len(compressedBytes)))
+	stats.BytesBeforeCompress.Add(int64(len(encodedBytes)))
+	stats.BytesAfterCompress.Add(int64(len(compressedBytes)))
 	stats.FilesProcessed.Add(1)
 
 	// 5. Send file record to the verification channel
@@ -327,17 +359,32 @@ func verifyAndCleanWorker(workerID int, fileChan <-chan FileRecord, stats *Bench
 	// The worker loops until the channel is closed.
 	for record := range fileChan {
 
-		// 1. Read the content of the file (base64 encoded)
-		encodedBytes, err := os.ReadFile(record.Filename)
+		// 1. Read the compressed file
+		compressedBytes, err := os.ReadFile(record.Filename)
 		if err != nil {
 			fmt.Printf("Worker %d: Error reading file %s: %v\n", workerID, record.Filename, err)
 			stats.ErrorsEncountered.Add(1)
 			continue
 		}
 
-		stats.BytesRead.Add(int64(len(encodedBytes)))
+		stats.BytesRead.Add(int64(len(compressedBytes)))
 
-		// 2. Decode the base64 content
+		// 2. Decompress the content with gzip
+		gzipReader, err := gzip.NewReader(bytes.NewReader(compressedBytes))
+		if err != nil {
+			fmt.Printf("Worker %d: Error creating gzip reader for file %s: %v\n", workerID, record.Filename, err)
+			stats.ErrorsEncountered.Add(1)
+			continue
+		}
+		encodedBytes, err := io.ReadAll(gzipReader)
+		gzipReader.Close()
+		if err != nil {
+			fmt.Printf("Worker %d: Error decompressing file %s: %v\n", workerID, record.Filename, err)
+			stats.ErrorsEncountered.Add(1)
+			continue
+		}
+
+		// 3. Decode the base64 content
 		decodedBytes, err := base64.StdEncoding.DecodeString(string(encodedBytes))
 		if err != nil {
 			fmt.Printf("Worker %d: Error decoding base64 in file %s: %v\n", workerID, record.Filename, err)
@@ -345,12 +392,12 @@ func verifyAndCleanWorker(workerID int, fileChan <-chan FileRecord, stats *Bench
 			continue
 		}
 
-		// 3. Compute SHA512 of the decoded bytes (new hash)
+		// 4. Compute SHA512 of the decoded bytes (new hash)
 		hasher := sha512.New()
 		hasher.Write(decodedBytes)
 		newHash := hasher.Sum(nil)
 
-		// 4. Compare it with the original hash using bytes.Equal
+		// 5. Compare it with the original hash using bytes.Equal
 		if !bytes.Equal(newHash, record.OriginalHash) {
 			fmt.Printf("Worker %d: INTEGRITY CHECK FAILED (Hash Mismatch) for file %s\n", workerID, record.Filename)
 			stats.ErrorsEncountered.Add(1)
@@ -358,7 +405,7 @@ func verifyAndCleanWorker(workerID int, fileChan <-chan FileRecord, stats *Bench
 			stats.FilesVerified.Add(1)
 		}
 
-		// 5. Delete the file
+		// 6. Delete the file
 		if err := os.Remove(record.Filename); err != nil {
 			fmt.Printf("Worker %d: Error deleting file %s: %v\n", workerID, record.Filename, err)
 			stats.ErrorsEncountered.Add(1)

@@ -1,18 +1,16 @@
 # Go CPU and I/O Benchmark
 
-A comprehensive Go program designed to benchmark CPU and I/O performance through concurrent file operations, cryptographic hashing, and data integrity verification.
+A comprehensive Go program designed to benchmark CPU and I/O performance through concurrent file operations, gzip compression/decompression, cryptographic hashing, and data integrity verification.
 
 This tool provides detailed performance metrics, configurable parameters via CLI flags, optional profiling support, and comprehensive error tracking - making it ideal for both performance testing and learning Go's concurrency patterns.
 
-## Features
-
-### Core Functionality
-
-- **CPU-Intensive Work**: SHA512 hashing and Base64 encoding/decoding to stress the CPU
+## Features### Core Functionality
+- **CPU-Intensive Work**: Gzip compression/decompression, SHA512 hashing, and Base64 encoding/decoding to stress the CPU
 - **I/O-Bound Operations**: Concurrent writing and reading of configurable file sizes
 - **High Concurrency**: Efficient goroutine pooling with configurable worker counts
 - **Producer-Consumer Pattern**: Clean separation of file creation and verification
 - **Data Integrity Verification**: Cryptographic hash comparison using `bytes.Equal()`
+- **Compression Statistics**: Tracks compression ratios and space savings
 - **Automatic Cleanup**: Self-managing temporary directory lifecycle
 
 ### Performance & Monitoring
@@ -33,6 +31,8 @@ This tool provides detailed performance metrics, configurable parameters via CLI
 
 - **Unit Tests**: Comprehensive test coverage for all major functions
 - **Benchmark Tests**: Go benchmarks for performance measurement and regression testing
+  - Individual benchmarks for SHA512 hashing, Base64 encoding/decoding, and gzip compression/decompression
+  - Full pipeline benchmark testing the complete workflow
 
 ## How It Works
 
@@ -46,19 +46,21 @@ The benchmark operates in two main concurrent phases with a producer-consumer pa
      1. Generates cryptographically random data
      2. Computes SHA512 hash of original data
      3. Base64-encodes the data (~33% size increase)
-     4. Writes encoded data to unique file
-     5. Sends `FileRecord` (filename + hash) to channel
-     6. Updates statistics (files processed, bytes written)
+     4. Gzip-compresses the encoded data (adds CPU load, reduces disk I/O)
+     5. Writes compressed data to unique file
+     6. Sends `FileRecord` (filename + hash) to channel
+     7. Updates statistics (files processed, bytes written, compression metrics)
 
 2. **Consumer Phase (`verifyAndCleanWorker`)**
    - Worker pool with configurable size
    - Each consumer:
      1. Receives `FileRecord` from channel
-     2. Reads encoded file from disk
-     3. Base64-decodes to recover original data
-     4. Computes SHA512 hash of decoded data
-     5. Compares with original hash using `bytes.Equal()`
-     6. Deletes file and updates statistics
+     2. Reads compressed file from disk
+     3. Gzip-decompresses the data (CPU-intensive)
+     4. Base64-decodes to recover original data
+     5. Computes SHA512 hash of decoded data
+     6. Compares with original hash using `bytes.Equal()`
+     7. Deletes file and updates statistics
 
 3. **Progress Reporting** (optional)
    - Separate goroutine updates console every second
@@ -229,6 +231,12 @@ Throughput:
   Operations/sec: 588.68
   MB/sec (raw data): 294.34
   MB/sec (disk I/O): 784.91
+
+Compression:
+  Before compression: 1333.00 MB
+  After compression: 1003.82 MB
+  Compression ratio: 75.32%
+  Space savings: 24.68%
 
 Average time per file: 3.397ms
 

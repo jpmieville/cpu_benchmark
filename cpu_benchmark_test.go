@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
 	"crypto/sha512"
 	"encoding/base64"
 	"os"
@@ -56,8 +57,19 @@ func TestVerifyAndCleanWorker(t *testing.T) {
 	originalHash := hasher.Sum(nil)
 
 	encodedContent := base64.StdEncoding.EncodeToString(testData)
+	
+	// Compress the encoded content with gzip
+	var compressedBuf bytes.Buffer
+	gzipWriter := gzip.NewWriter(&compressedBuf)
+	if _, err := gzipWriter.Write([]byte(encodedContent)); err != nil {
+		t.Fatalf("Failed to compress test data: %v", err)
+	}
+	if err := gzipWriter.Close(); err != nil {
+		t.Fatalf("Failed to close gzip writer: %v", err)
+	}
+	
 	filename := filepath.Join(tempDir, "test_file.txt")
-	if err := os.WriteFile(filename, []byte(encodedContent), 0644); err != nil {
+	if err := os.WriteFile(filename, compressedBuf.Bytes(), 0644); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
@@ -103,8 +115,19 @@ func TestVerifyAndCleanWorkerWithCorruptData(t *testing.T) {
 	// Write different data to file
 	corruptedData := []byte("corrupted data")
 	encodedContent := base64.StdEncoding.EncodeToString(corruptedData)
+	
+	// Compress the encoded content with gzip
+	var compressedBuf bytes.Buffer
+	gzipWriter := gzip.NewWriter(&compressedBuf)
+	if _, err := gzipWriter.Write([]byte(encodedContent)); err != nil {
+		t.Fatalf("Failed to compress test data: %v", err)
+	}
+	if err := gzipWriter.Close(); err != nil {
+		t.Fatalf("Failed to close gzip writer: %v", err)
+	}
+	
 	filename := filepath.Join(tempDir, "test_file.txt")
-	if err := os.WriteFile(filename, []byte(encodedContent), 0644); err != nil {
+	if err := os.WriteFile(filename, compressedBuf.Bytes(), 0644); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 

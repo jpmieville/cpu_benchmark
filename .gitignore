@@ -33,3 +33,4 @@ go.work.sum
 
 # project specific
 *.prof
+cpu_benchmark
