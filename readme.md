@@ -1,88 +1,341 @@
 # Go CPU and I/O Benchmark
 
-This is a simple but effective Go program designed to benchmark CPU and I/O performance by performing a series of concurrent file creation, processing, and verification tasks.
+A comprehensive Go program designed to benchmark CPU and I/O performance through concurrent file operations, cryptographic hashing, and data integrity verification.
 
-It uses a classic producer-consumer pattern to efficiently manage concurrent operations, making it a great example of Go's powerful concurrency features.
+This tool provides detailed performance metrics, configurable parameters via CLI flags, optional profiling support, and comprehensive error tracking - making it ideal for both performance testing and learning Go's concurrency patterns.
 
 ## Features
 
-- **CPU-Intensive Work**: Utilizes SHA512 hashing and Base64 encoding/decoding to stress the CPU.
-- **I/O-Bound Operations**: Involves writing and reading multi-megabyte files from the disk.
-- **High Concurrency**: Leverages Go's concurrency model with goroutines and channels.
-- **Producer-Consumer Pattern**: Efficiently separates the work of file creation (producers) from file verification (consumers).
-- **Data Integrity Check**: Ensures the correctness of the entire process by comparing cryptographic hashes before and after file operations.
-- **Automatic Cleanup**: Creates a temporary directory for its work and removes it upon completion.
+### Core Functionality
+- **CPU-Intensive Work**: SHA512 hashing and Base64 encoding/decoding to stress the CPU
+- **I/O-Bound Operations**: Concurrent writing and reading of configurable file sizes
+- **High Concurrency**: Efficient goroutine pooling with configurable worker counts
+- **Producer-Consumer Pattern**: Clean separation of file creation and verification
+- **Data Integrity Verification**: Cryptographic hash comparison using `bytes.Equal()`
+- **Automatic Cleanup**: Self-managing temporary directory lifecycle
 
-## How it Works
+### Performance & Monitoring
+- **Detailed Metrics**: Throughput (files/sec, ops/sec, MB/sec), timing statistics
+- **Real-time Progress**: Live updates showing creation/verification status and error counts
+- **Comprehensive Error Tracking**: Counts and reports all errors encountered during execution
+- **System Information**: Reports CPU cores and GOMAXPROCS settings
 
-The benchmark operates in two main concurrent phases, orchestrated by the `main` function.
+### Configuration & Profiling
+- **CLI Flags**: Fully configurable via command-line arguments
+- **CPU Profiling**: Optional pprof CPU profiling support
+- **Memory Profiling**: Optional heap profile generation
+- **Flexible Sizing**: Configurable file count, size, and worker pool size
 
-1.  **Producer Phase (`createAndHashFile`)**
-    - A pool of "producer" goroutines is started (one for each file).
-    - Each producer:
-        1.  Generates a block of random data in memory.
-        2.  Computes the SHA512 hash of this original data.
-        3.  Base64-encodes the data.
-        4.  Writes the *encoded* data to a unique file in a temporary directory.
-        5.  Sends a `FileRecord` (containing the filename and the original hash) to a shared channel.
+### Testing
+- **Unit Tests**: Comprehensive test coverage for all major functions
+- **Benchmark Tests**: Go benchmarks for performance measurement and regression testing
 
-2.  **Consumer Phase (`verifyAndCleanWorker`)**
-    - A worker pool of "consumer" goroutines is started.
-    - Each consumer:
-        1.  Receives a `FileRecord` from the shared channel.
-        2.  Reads the content from the specified file.
-        3.  Base64-decodes the content to get the original data back.
-        4.  Computes a new SHA512 hash of the decoded data.
-        5.  Compares the new hash with the original hash from the `FileRecord` to verify data integrity.
-        6.  Deletes the file from the disk.
+## How It Works
+
+The benchmark operates in two main concurrent phases with a producer-consumer pattern:
+
+### Architecture
+
+1. **Producer Phase (`createAndHashFile`)**
+   - Spawns N goroutines (one per file)
+   - Each producer:
+     1. Generates cryptographically random data
+     2. Computes SHA512 hash of original data
+     3. Base64-encodes the data (~33% size increase)
+     4. Writes encoded data to unique file
+     5. Sends `FileRecord` (filename + hash) to channel
+     6. Updates statistics (files processed, bytes written)
+
+2. **Consumer Phase (`verifyAndCleanWorker`)**
+   - Worker pool with configurable size
+   - Each consumer:
+     1. Receives `FileRecord` from channel
+     2. Reads encoded file from disk
+     3. Base64-decodes to recover original data
+     4. Computes SHA512 hash of decoded data
+     5. Compares with original hash using `bytes.Equal()`
+     6. Deletes file and updates statistics
+
+3. **Progress Reporting** (optional)
+   - Separate goroutine updates console every second
+   - Shows: progress %, created/verified counts, errors, rate
 
 ### Synchronization
 
-- A `sync.WaitGroup` is used to wait for all **producers** to finish their work. Once they are done, the shared channel is closed.
-- Closing the channel signals to the **consumers** that no more work will be sent. The consumers will finish processing any remaining items in the channel and then exit.
-- A second `sync.WaitGroup` is used to wait for all **consumers** to finish before the program calculates the final duration and exits.
+- **Producer WaitGroup**: Tracks completion of all file creation goroutines
+- **Consumer WaitGroup**: Tracks completion of all worker goroutines
+- **Channel Closing**: Signals consumers when no more files will be produced
+- **Atomic Operations**: Thread-safe statistics updates via `atomic.Int64`
 
-## How to Run
+### Error Handling
 
-1.  Navigate to the directory containing the source file.
-2.  Run the program directly using the Go toolchain:
+- All errors are tracked in atomic counter
+- Errors logged to stderr with context (worker ID, filename)
+- Benchmark returns error code if any errors encountered
+- Continues processing despite individual file failures
 
-    ```sh
-    go run cpu_benchmark.go
-    ```
+### Data Flow
 
-3.  Alternatively, you can build an executable first and then run it:
+```
+[Producer 1] ──┐
+[Producer 2] ──┤
+[Producer 3] ──┼──> [Channel] ──> [Consumer Worker Pool] ──> [Statistics]
+    ...        │                        (10 workers)
+[Producer N] ──┘
+```
 
-    ```sh
-    # Build the executable
-    go build
+## Installation
 
-    # Run the benchmark (on Linux/macOS)
-    ./cpu_benchmark
+```sh
+# Clone the repository (if not already done)
+git clone https://github.com/jpmieville/cpu_benchmark.git
+cd cpu_benchmark
 
-    # Run the benchmark (on Windows)
-    .\cpu_benchmark.exe
-    ```
+# Build the executable
+go build -o cpu_benchmark
+```
 
-## Configuration
+## Usage
 
-You can easily configure the benchmark by changing the `const` values at the top of the `cpu_benchmark.go` file:
+### Basic Usage
 
-- `NumFiles`: The total number of files to create and process.
-- `FileSizeMB`: The size of the initial random data for each file in megabytes.
-- `ConsumerWorkers`: The number of concurrent goroutines in the consumer worker pool.
-- `TempDir`: The name of the temporary directory where files will be stored.
+Run with default settings (100 files, 1MB each, 10 workers):
+
+```sh
+./cpu_benchmark
+```
+
+### Command-Line Flags
+
+```sh
+./cpu_benchmark [flags]
+
+Flags:
+  -files int
+        total number of files to create and verify (default 100)
+  -size int
+        size of each file in megabytes (default 1)
+  -workers int
+        number of concurrent consumer goroutines (default 10)
+  -dir string
+        temporary directory for benchmark files (default "cpu_benchmark_files")
+  -progress
+        show progress updates during benchmark (default true)
+  -cpuprofile string
+        write CPU profile to file (e.g., "cpu.prof")
+  -memprofile string
+        write memory profile to file (e.g., "mem.prof")
+```
+
+### Examples
+
+**Standard benchmark with 1000 files:**
+```sh
+./cpu_benchmark -files 1000
+```
+
+**Large file benchmark (10MB files):**
+```sh
+./cpu_benchmark -size 10 -files 100
+```
+
+**High concurrency test:**
+```sh
+./cpu_benchmark -workers 50 -files 500
+```
+
+**With CPU profiling:**
+```sh
+./cpu_benchmark -cpuprofile cpu.prof -files 1000
+go tool pprof cpu.prof
+```
+
+**With memory profiling:**
+```sh
+./cpu_benchmark -memprofile mem.prof -files 500
+go tool pprof mem.prof
+```
+
+**Quiet mode (no progress):**
+```sh
+./cpu_benchmark -progress=false -files 1000
+```
+
+**Custom temp directory:**
+```sh
+./cpu_benchmark -dir /tmp/my_benchmark_files
+```
+
+## Testing
+
+### Run Unit Tests
+
+```sh
+go test -v
+```
+
+### Run Benchmark Tests
+
+```sh
+go test -bench=. -benchmem
+```
+
+### Run with Race Detector
+
+```sh
+go test -race
+```
+
+### Test Coverage
+
+```sh
+go test -cover
+go test -coverprofile=coverage.out
+go tool cover -html=coverage.out
+```
 
 ## Example Output
+
+### Standard Run
 
 ```
 Starting CPU and I/O benchmark:
   Files to process: 1000
   File size: 1 MB
   Consumer workers: 10
+  Temp directory: cpu_benchmark_files
+
+[100.0%] Created: 1000 | Verified: 1000 | Errors: 0 | Rate: 97.5 files/sec
 
 --- Benchmark Complete ---
-Total time taken for all 1000 files (Create/Hash/Encode/Write/Read/Decode/Verify/Delete): 10.251s
+Total time: 10.251s
+Files processed: 1000
+Files verified: 1000
+Errors encountered: 0
+
+Throughput:
+  Files/sec: 97.56
+  Operations/sec: 195.12
+  MB/sec (raw data): 97.56
+  MB/sec (encoded I/O): 129.75
+
 Average time per file: 10.251ms
+
+System info:
+  CPU cores: 8
+  GOMAXPROCS: 8
 ```
 
+### With Profiling
+
+```
+Starting CPU and I/O benchmark:
+  Files to process: 1000
+  File size: 1 MB
+  Consumer workers: 10
+  Temp directory: cpu_benchmark_files
+  CPU profile: cpu.prof
+  Memory profile: mem.prof
+
+[... benchmark output ...]
+```
+
+## Performance Analysis
+
+### Analyzing CPU Profile
+
+```sh
+./cpu_benchmark -cpuprofile cpu.prof -files 1000
+go tool pprof cpu.prof
+
+# Interactive commands in pprof:
+(pprof) top           # Show top functions by CPU time
+(pprof) list main     # Show annotated source for main package
+(pprof) web           # Generate SVG graph (requires Graphviz)
+```
+
+### Analyzing Memory Profile
+
+```sh
+./cpu_benchmark -memprofile mem.prof -files 1000
+go tool pprof mem.prof
+
+# Interactive commands:
+(pprof) top           # Show top memory allocations
+(pprof) list main
+(pprof) web
+```
+
+## Troubleshooting
+
+### Common Issues
+
+**"Permission denied" errors:**
+- Ensure you have write permissions in the directory
+- Try specifying a different temp directory: `-dir /tmp/benchmark`
+
+**High memory usage:**
+- Reduce file size: `-size 1`
+- Reduce concurrent operations: `-workers 5`
+- Use memory profiling to identify bottlenecks: `-memprofile mem.prof`
+
+**Slow performance:**
+- Check disk I/O (SSD vs HDD makes a significant difference)
+- Verify CPU isn't throttled (check `runtime.NumCPU()` output)
+- Try adjusting worker count to match CPU cores
+- Use CPU profiling: `-cpuprofile cpu.prof`
+
+**Integrity check failures:**
+- This should never happen with uncorrupted data
+- If you see these, it may indicate:
+  - Hardware issues (RAM, disk)
+  - Filesystem corruption
+  - Race conditions (please report as a bug!)
+
+## Performance Tips
+
+- **For CPU benchmarking**: Use smaller files with more workers
+- **For I/O benchmarking**: Use larger files (10MB+)
+- **For concurrency testing**: Increase workers to 2-4x CPU core count
+- **For production profiling**: Always use `-cpuprofile` and `-memprofile`
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+For major changes:
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes
+4. Add tests for new functionality
+5. Ensure all tests pass (`go test -v`)
+6. Run benchmarks (`go test -bench=.`)
+7. Commit your changes (`git commit -m 'Add amazing feature'`)
+8. Push to the branch (`git push origin feature/amazing-feature`)
+9. Open a Pull Request
+
+### Development
+
+```sh
+# Run tests with coverage
+go test -v -cover
+
+# Run with race detector
+go test -race
+
+# Format code
+go fmt ./...
+
+# Run linter (requires golangci-lint)
+golangci-lint run
+```
+
+## License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- Built with Go's powerful standard library
+- Inspired by real-world benchmarking needs
+- Thanks to all contributors!
