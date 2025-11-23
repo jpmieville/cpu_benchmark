@@ -4,7 +4,10 @@ A comprehensive Go program designed to benchmark CPU and I/O performance through
 
 This tool provides detailed performance metrics, configurable parameters via CLI flags, optional profiling support, and comprehensive error tracking - making it ideal for both performance testing and learning Go's concurrency patterns.
 
-## Features### Core Functionality
+## Features
+
+### Core Functionality
+
 - **CPU-Intensive Work**: Gzip compression/decompression, SHA512 hashing, and Base64 encoding/decoding to stress the CPU
 - **I/O-Bound Operations**: Concurrent writing and reading of configurable file sizes
 - **High Concurrency**: Efficient goroutine pooling with configurable worker counts
