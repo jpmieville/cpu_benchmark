@@ -14,6 +14,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/shirou/gopsutil/v3/cpu"
 )
 
 // FileRecord holds the filename and the original hash of its content.
@@ -229,6 +231,17 @@ func printBenchmarkResults(stats *BenchmarkStats, config Config, duration time.D
 	fmt.Printf("\nSystem info:\n")
 	fmt.Printf("  CPU cores: %d\n", runtime.NumCPU())
 	fmt.Printf("  GOMAXPROCS: %d\n", runtime.GOMAXPROCS(0))
+
+	// Get CPU model and architecture info
+	if cpuInfo, err := cpu.Info(); err == nil && len(cpuInfo) > 0 {
+		fmt.Printf("  CPU model: %s\n", cpuInfo[0].ModelName)
+		fmt.Printf("  CPU architecture: %s\n", runtime.GOARCH)
+		if cpuInfo[0].Mhz > 0 {
+			fmt.Printf("  CPU frequency: %.2f GHz\n", cpuInfo[0].Mhz/1000.0)
+		}
+	} else {
+		fmt.Printf("  CPU architecture: %s\n", runtime.GOARCH)
+	}
 }
 
 func progressReporter(stats *BenchmarkStats, totalFiles int, done chan struct{}) {
