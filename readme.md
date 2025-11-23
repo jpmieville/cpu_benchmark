@@ -7,6 +7,7 @@ This tool provides detailed performance metrics, configurable parameters via CLI
 ## Features
 
 ### Core Functionality
+
 - **CPU-Intensive Work**: SHA512 hashing and Base64 encoding/decoding to stress the CPU
 - **I/O-Bound Operations**: Concurrent writing and reading of configurable file sizes
 - **High Concurrency**: Efficient goroutine pooling with configurable worker counts
@@ -15,18 +16,21 @@ This tool provides detailed performance metrics, configurable parameters via CLI
 - **Automatic Cleanup**: Self-managing temporary directory lifecycle
 
 ### Performance & Monitoring
+
 - **Detailed Metrics**: Throughput (files/sec, ops/sec, MB/sec), timing statistics
 - **Real-time Progress**: Live updates showing creation/verification status and error counts
 - **Comprehensive Error Tracking**: Counts and reports all errors encountered during execution
 - **System Information**: Reports CPU cores and GOMAXPROCS settings
 
 ### Configuration & Profiling
+
 - **CLI Flags**: Fully configurable via command-line arguments
 - **CPU Profiling**: Optional pprof CPU profiling support
 - **Memory Profiling**: Optional heap profile generation
 - **Flexible Sizing**: Configurable file count, size, and worker pool size
 
 ### Testing
+
 - **Unit Tests**: Comprehensive test coverage for all major functions
 - **Benchmark Tests**: Go benchmarks for performance measurement and regression testing
 
@@ -130,38 +134,45 @@ Flags:
 ### Examples
 
 **Standard benchmark with 1000 files:**
+
 ```sh
 ./cpu_benchmark -files 1000
 ```
 
 **Large file benchmark (10MB files):**
+
 ```sh
 ./cpu_benchmark -size 10 -files 100
 ```
 
 **High concurrency test:**
+
 ```sh
 ./cpu_benchmark -workers 50 -files 500
 ```
 
 **With CPU profiling:**
+
 ```sh
 ./cpu_benchmark -cpuprofile cpu.prof -files 1000
 go tool pprof cpu.prof
 ```
 
 **With memory profiling:**
+
 ```sh
 ./cpu_benchmark -memprofile mem.prof -files 500
 go tool pprof mem.prof
 ```
 
 **Quiet mode (no progress):**
+
 ```sh
 ./cpu_benchmark -progress=false -files 1000
 ```
 
 **Custom temp directory:**
+
 ```sh
 ./cpu_benchmark -dir /tmp/my_benchmark_files
 ```
@@ -200,30 +211,34 @@ go tool cover -html=coverage.out
 
 ```
 Starting CPU and I/O benchmark:
-  Files to process: 1000
+  Files to process: 100
   File size: 1 MB
   Consumer workers: 10
   Temp directory: cpu_benchmark_files
 
-[100.0%] Created: 1000 | Verified: 1000 | Errors: 0 | Rate: 97.5 files/sec
+
 
 --- Benchmark Complete ---
-Total time: 10.251s
-Files processed: 1000
-Files verified: 1000
+Total time: 340ms
+Files processed: 100
+Files verified: 100
 Errors encountered: 0
 
 Throughput:
-  Files/sec: 97.56
-  Operations/sec: 195.12
-  MB/sec (raw data): 97.56
-  MB/sec (encoded I/O): 129.75
+  Files/sec: 294.34
+  Operations/sec: 588.68
+  MB/sec (raw data): 294.34
+  MB/sec (disk I/O): 784.91
 
-Average time per file: 10.251ms
+Average time per file: 3.397ms
 
 System info:
   CPU cores: 8
   GOMAXPROCS: 8
+  CPU model: Intel(R) Core(TM) i7-8650U CPU @ 1.90GHz
+  CPU architecture: amd64
+  CPU frequency: 4.20 GHz
+
 ```
 
 ### With Profiling
@@ -271,21 +286,25 @@ go tool pprof mem.prof
 ### Common Issues
 
 **"Permission denied" errors:**
+
 - Ensure you have write permissions in the directory
 - Try specifying a different temp directory: `-dir /tmp/benchmark`
 
 **High memory usage:**
+
 - Reduce file size: `-size 1`
 - Reduce concurrent operations: `-workers 5`
 - Use memory profiling to identify bottlenecks: `-memprofile mem.prof`
 
 **Slow performance:**
+
 - Check disk I/O (SSD vs HDD makes a significant difference)
 - Verify CPU isn't throttled (check `runtime.NumCPU()` output)
 - Try adjusting worker count to match CPU cores
 - Use CPU profiling: `-cpuprofile cpu.prof`
 
 **Integrity check failures:**
+
 - This should never happen with uncorrupted data
 - If you see these, it may indicate:
   - Hardware issues (RAM, disk)
@@ -304,6 +323,7 @@ go tool pprof mem.prof
 Contributions are welcome! Please feel free to submit a Pull Request.
 
 For major changes:
+
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
 3. Make your changes

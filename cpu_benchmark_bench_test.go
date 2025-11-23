@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/sha512"
 	"encoding/base64"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -45,7 +46,7 @@ func BenchmarkVerifyAndCleanWorker(b *testing.B) {
 		originalHash := hasher.Sum(nil)
 
 		encodedContent := base64.StdEncoding.EncodeToString(testData)
-		filename := filepath.Join(tempDir, "bench_file_"+string(rune(i))+".txt")
+		filename := filepath.Join(tempDir, fmt.Sprintf("bench_file_%d.txt", i))
 		os.WriteFile(filename, []byte(encodedContent), 0644)
 
 		fileChan <- FileRecord{
