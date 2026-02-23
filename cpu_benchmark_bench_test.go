@@ -27,7 +27,7 @@ func BenchmarkCreateAndHashFile(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		wg.Add(1)
-		go createAndHashFile(i, fileSize, fileChan, stats, tempDir, &wg)
+		go createAndHashFile(i, fileSize, fileChan, stats, tempDir, 6, &wg)
 	}
 
 	wg.Wait()
@@ -49,13 +49,13 @@ func BenchmarkVerifyAndCleanWorker(b *testing.B) {
 		originalHash := hasher.Sum(nil)
 
 		encodedContent := base64.StdEncoding.EncodeToString(testData)
-		
+
 		// Compress the encoded content with gzip
 		var compressedBuf bytes.Buffer
 		gzipWriter := gzip.NewWriter(&compressedBuf)
 		gzipWriter.Write([]byte(encodedContent))
 		gzipWriter.Close()
-		
+
 		filename := filepath.Join(tempDir, fmt.Sprintf("bench_file_%d.txt", i))
 		os.WriteFile(filename, compressedBuf.Bytes(), 0644)
 

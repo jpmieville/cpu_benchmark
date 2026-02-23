@@ -20,7 +20,7 @@ func TestCreateAndHashFile(t *testing.T) {
 
 	fileSize := 1024 // 1KB for faster tests
 	wg.Add(1)
-	go createAndHashFile(0, fileSize, fileChan, stats, tempDir, &wg)
+	go createAndHashFile(0, fileSize, fileChan, stats, tempDir, 6, &wg)
 	wg.Wait()
 	close(fileChan)
 
@@ -57,7 +57,7 @@ func TestVerifyAndCleanWorker(t *testing.T) {
 	originalHash := hasher.Sum(nil)
 
 	encodedContent := base64.StdEncoding.EncodeToString(testData)
-	
+
 	// Compress the encoded content with gzip
 	var compressedBuf bytes.Buffer
 	gzipWriter := gzip.NewWriter(&compressedBuf)
@@ -67,7 +67,7 @@ func TestVerifyAndCleanWorker(t *testing.T) {
 	if err := gzipWriter.Close(); err != nil {
 		t.Fatalf("Failed to close gzip writer: %v", err)
 	}
-	
+
 	filename := filepath.Join(tempDir, "test_file.txt")
 	if err := os.WriteFile(filename, compressedBuf.Bytes(), 0644); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
@@ -115,7 +115,7 @@ func TestVerifyAndCleanWorkerWithCorruptData(t *testing.T) {
 	// Write different data to file
 	corruptedData := []byte("corrupted data")
 	encodedContent := base64.StdEncoding.EncodeToString(corruptedData)
-	
+
 	// Compress the encoded content with gzip
 	var compressedBuf bytes.Buffer
 	gzipWriter := gzip.NewWriter(&compressedBuf)
@@ -125,7 +125,7 @@ func TestVerifyAndCleanWorkerWithCorruptData(t *testing.T) {
 	if err := gzipWriter.Close(); err != nil {
 		t.Fatalf("Failed to close gzip writer: %v", err)
 	}
-	
+
 	filename := filepath.Join(tempDir, "test_file.txt")
 	if err := os.WriteFile(filename, compressedBuf.Bytes(), 0644); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
@@ -175,11 +175,12 @@ func TestRunBenchmark(t *testing.T) {
 
 	tempDir := t.TempDir()
 	config := Config{
-		NumFiles:        5,
-		FileSizeMB:      1,
-		ConsumerWorkers: 2,
-		TempDir:         tempDir,
-		ShowProgress:    false,
+		NumFiles:         5,
+		FileSizeMB:       1,
+		ConsumerWorkers:  2,
+		TempDir:          tempDir,
+		ShowProgress:     false,
+		CompressionLevel: 6,
 	}
 
 	if err := runBenchmark(config); err != nil {
@@ -194,8 +195,8 @@ func TestRunBenchmark(t *testing.T) {
 
 func TestConfigValidation(t *testing.T) {
 	tests := []struct {
-		name   string
-		config Config
+		name    string
+		config  Config
 		wantErr bool
 	}{
 		{
