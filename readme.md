@@ -26,6 +26,7 @@ This tool provides detailed performance metrics, configurable parameters via CLI
 ### Configuration & Profiling
 
 - **CLI Flags**: Fully configurable via command-line arguments
+- **Compression Level**: Configurable gzip compression level (1-9)
 - **CPU Profiling**: Optional pprof CPU profiling support
 - **Memory Profiling**: Optional heap profile generation
 - **Flexible Sizing**: Configurable file count, size, and worker pool size
@@ -130,6 +131,8 @@ Flags:
         temporary directory for benchmark files (default "cpu_benchmark_files")
   -progress
         show progress updates during benchmark (default true)
+  -compress int
+        gzip compression level 1-9 (default 6)
   -cpuprofile string
         write CPU profile to file (e.g., "cpu.prof")
   -memprofile string
@@ -154,6 +157,18 @@ Flags:
 
 ```sh
 ./cpu_benchmark -workers 50 -files 500
+```
+
+**With compression level (faster, less compression):**
+
+```sh
+./cpu_benchmark -compress 1 -files 500
+```
+
+**With maximum compression:**
+
+```sh
+./cpu_benchmark -compress 9 -files 500
 ```
 
 **With CPU profiling:**
